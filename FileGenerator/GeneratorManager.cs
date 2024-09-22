@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,7 +17,8 @@ namespace FileGenerator
         private const int repetitionsMax = 5;
         private const int blockSize = 1000;
         private const double fileSizeConst = 1024.0;
-        
+        private const int numberOfParallelBlocks = 10;
+
         public GeneratorManager()
         {
             random = new Random();
@@ -30,7 +32,7 @@ namespace FileGenerator
             {
                 if (File.Exists(filePath))
                     File.Delete(filePath);
-
+                
                 while(true)
                 {
                     var resultGetFileSize = GetFileSize(filePath);
@@ -38,13 +40,24 @@ namespace FileGenerator
                     {
                         if (resultGetFileSize.Item2 < fileSizeMB)
                         {
-                            var block = await GenerateFileBlockAsync();
-                            var blockSizeMB = GetBlockSizeMB(block);
+                            var blocks = await GenerateFileBlockMultipleAsync(numberOfParallelBlocks);
+                            var blockSizeMB = GetBlockSizeMB(blocks);
 
-                            if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)                           
-                                block = GenerateFileLine();
+                            if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
+                            {
+                                var subBlock = new ConcurrentBag<string>();
+                                foreach(var line in blocks)
+                                {
+                                    subBlock.Add(line);
+                                    blockSizeMB = GetBlockSizeMB(subBlock);
+
+                                    if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
+                                        break;
+                                }
+                                blocks = subBlock;
+                            }
                             
-                            var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, block);
+                            var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, blocks);
                             if (!resultWriteBlockToFile.Item1)
                                 return (false, resultWriteBlockToFile.Item2);
                         }
@@ -84,30 +97,48 @@ namespace FileGenerator
             }
         }
 
-        private Task<string> GenerateFileBlockAsync()
+        private List<string> GenerateFileBlockSingle()
         {
-            return Task.Run(() => 
+            var stringList = new List<string>();
+            var linesCounter = 0;
+            while (linesCounter < blockSize)
             {
-                var stringBuilder = new StringBuilder();
-                var linesCounter = 0;
-                while (linesCounter < blockSize)
+                var lengthDigits = random.Next(1, digitsMaxLength);
+                var lengthLetters = random.Next(1, lettersMaxLength);
+                var numberOfRepetions = random.Next(1, repetitionsMax);
+                var randomString = GenerateRandomString(lengthLetters);
+
+                for (int i = 0; i < numberOfRepetions && linesCounter < blockSize; i++)
                 {
-                    var lengthDigits = random.Next(1, digitsMaxLength);
-                    var lengthLetters = random.Next(1, lettersMaxLength);
-                    var numberOfRepetions = random.Next(1, repetitionsMax);
-                    var randomString = GenerateRandomString(lengthLetters);
-
-                    for (int i = 0; i < numberOfRepetions && linesCounter < blockSize; i++)
-                    {
-                        var randomNumber = GenerateRandomNumber(lengthDigits);
-                        var randomCombinedString = $"{randomNumber}. {randomString}";
-                        stringBuilder.AppendLine(randomCombinedString);
-                        linesCounter++;
-                    }
+                    var randomNumber = GenerateRandomNumber(lengthDigits);
+                    var randomCombinedString = $"{randomNumber}. {randomString}";
+                    stringList.Add(randomCombinedString);
+                    linesCounter++;
                 }
+            }
 
-                return stringBuilder.ToString();
-            });           
+            return stringList
+            .OrderBy(line => Guid.NewGuid())
+            .ToList();                      
+        }
+
+        private async Task<ConcurrentBag<string>> GenerateFileBlockMultipleAsync(int numberOfBlocks)
+        {
+            var tasks = new List<Task>();
+            var allBlocks = new ConcurrentBag<string>();
+            
+            for (int i = 0; i < numberOfBlocks; i++)
+            {
+                var task = Task.Run(() =>
+                {
+                    foreach(var line in GenerateFileBlockSingle())
+                        allBlocks.Add(line);
+                });
+                tasks.Add(task);          
+            }
+
+            await Task.WhenAll(tasks.ToArray());
+            return allBlocks;
         }
 
         private string GenerateFileLine()
@@ -122,18 +153,23 @@ namespace FileGenerator
             return randomCombinedString;
         }
 
-        private double GetBlockSizeMB(string block)
+        private double GetBlockSizeMB(IEnumerable<string> block)
         {
-            var bytes = Encoding.UTF8.GetBytes(block);
-            var sizeInMB = (double)bytes.Length / (fileSizeConst * fileSizeConst);
+            var bytes = new List<byte>();
+            foreach (var line in block)
+            {
+                bytes.AddRange(Encoding.UTF8.GetBytes(line));
+            }
+
+            var sizeInMB = (double)bytes.ToArray().Length / (fileSizeConst * fileSizeConst);
             return sizeInMB;         
         }
 
-        private async Task<(bool,string)> WriteBlockToFileAsync(string filePath, string block)
+        private async Task<(bool,string)> WriteBlockToFileAsync(string filePath, IEnumerable<string> block)
         {
             try
             {
-                await File.AppendAllTextAsync(filePath, block);
+                await File.AppendAllLinesAsync(filePath, block);
                 return (true, string.Empty);
             }
             catch (Exception ex)
