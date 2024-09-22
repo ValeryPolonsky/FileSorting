@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FileGenerator\FileGenerator.csproj" />
+    <ProjectReference Include="..\FileGenerator\FileSorting.Generator.csproj" />
+    <ProjectReference Include="..\FileSorting.Generator\FileSorting.Generator.csproj" />
+    <ProjectReference Include="..\FileSorting.Sorter\FileSorting.Sorter.csproj" />
   </ItemGroup>
 
 </Project>
