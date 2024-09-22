@@ -39,7 +39,14 @@ namespace FileGenerator
                         if (resultGetFileSize.Item2 < fileSizeMB)
                         {
                             var block = await GenerateFileBlockAsync();
+                            var blockSizeMB = GetBlockSizeMB(block);
+
+                            if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)                           
+                                block = GenerateFileLine();
+                            
                             var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, block);
+                            if (!resultWriteBlockToFile.Item1)
+                                return (false, resultWriteBlockToFile.Item2);
                         }
                         else
                             return (true, string.Empty);
@@ -101,6 +108,25 @@ namespace FileGenerator
 
                 return stringBuilder.ToString();
             });           
+        }
+
+        private string GenerateFileLine()
+        {
+            var lengthDigits = random.Next(1, digitsMaxLength);
+            var lengthLetters = random.Next(1, lettersMaxLength);
+            var numberOfRepetions = random.Next(1, repetitionsMax);
+            var randomString = GenerateRandomString(lengthLetters);
+            var randomNumber = GenerateRandomNumber(lengthDigits);
+            var randomCombinedString = $"{randomNumber}. {randomString}";
+
+            return randomCombinedString;
+        }
+
+        private double GetBlockSizeMB(string block)
+        {
+            var bytes = Encoding.UTF8.GetBytes(block);
+            var sizeInMB = (double)bytes.Length / (fileSizeConst * fileSizeConst);
+            return sizeInMB;         
         }
 
         private async Task<(bool,string)> WriteBlockToFileAsync(string filePath, string block)
