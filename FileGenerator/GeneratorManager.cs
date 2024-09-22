@@ -11,6 +11,11 @@ namespace FileGenerator
         private readonly Random random;
         private readonly char[] letters;
         private readonly char[] digits;
+        private const int digitsMaxLength = 100;
+        private const int lettersMaxLength = 100;
+        private const int repetitionsMax = 5;
+        private const int blockSize = 1000;
+        private const double fileSizeConst = 1024.0;
         
         public GeneratorManager()
         {
@@ -19,12 +24,99 @@ namespace FileGenerator
             digits = "0123456789".ToCharArray();
         }
 
-        public void GenerateFile(string filePath)
+        public async Task<(bool,string)> GenerateFileAsync(string filePath, double fileSizeMB)
         {
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
 
+                while(true)
+                {
+                    var resultGetFileSize = GetFileSize(filePath);
+                    if (resultGetFileSize.Item1)
+                    {
+                        if (resultGetFileSize.Item2 < fileSizeMB)
+                        {
+                            var block = await GenerateFileBlockAsync();
+                            var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, block);
+                        }
+                        else
+                            return (true, string.Empty);
+                    }
+                    else
+                        return (false, resultGetFileSize.Item3);
+                }               
+            }
+            catch(Exception ex)
+            {
+                return (false, ex.ToString());
+            }           
+        }
+
+        private (bool,double,string) GetFileSize(string filePath)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(filePath);
+                if (fileInfo.Exists)
+                {
+                    long fileSizeInBytes = fileInfo.Length;
+                    double fileSizeInKilobytes = fileSizeInBytes / fileSizeConst;
+                    double fileSizeInMegabytes = fileSizeInKilobytes / fileSizeConst;
+                    return (true, fileSizeInMegabytes, string.Empty);
+                }
+                else
+                {
+                    return (true, 0, string.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, 0, ex.ToString());
+            }
+        }
+
+        private Task<string> GenerateFileBlockAsync()
+        {
+            return Task.Run(() => 
+            {
+                var stringBuilder = new StringBuilder();
+                var linesCounter = 0;
+                while (linesCounter < blockSize)
+                {
+                    var lengthDigits = random.Next(1, digitsMaxLength);
+                    var lengthLetters = random.Next(1, lettersMaxLength);
+                    var numberOfRepetions = random.Next(1, repetitionsMax);
+                    var randomString = GenerateRandomString(lengthLetters);
+
+                    for (int i = 0; i < numberOfRepetions && linesCounter < blockSize; i++)
+                    {
+                        var randomNumber = GenerateRandomNumber(lengthDigits);
+                        var randomCombinedString = $"{randomNumber}. {randomString}";
+                        stringBuilder.AppendLine(randomCombinedString);
+                        linesCounter++;
+                    }
+                }
+
+                return stringBuilder.ToString();
+            });           
+        }
+
+        private async Task<(bool,string)> WriteBlockToFileAsync(string filePath, string block)
+        {
+            try
+            {
+                await File.AppendAllTextAsync(filePath, block);
+                return (true, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.ToString());
+            }
         }
      
-        public string GenerateRandomString(int length)
+        private string GenerateRandomString(int length)
         {
             var builder = new StringBuilder();
 
@@ -36,7 +128,7 @@ namespace FileGenerator
             return builder.ToString();
         }
 
-        public string GenerateRandomNumber(int length)
+        private string GenerateRandomNumber(int length)
         {
             var builder = new StringBuilder();
 
