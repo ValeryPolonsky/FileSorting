@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FileSorting.Common;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,13 +12,7 @@ namespace FileGenerator
     {
         private readonly Random random;
         private readonly char[] letters;
-        private readonly char[] digits;
-        private const int digitsMaxLength = 100;
-        private const int lettersMaxLength = 100;
-        private const int repetitionsMax = 5;
-        private const int blockSize = 1000;
-        private const double fileSizeConst = 1024.0;
-        private const int numberOfParallelBlocks = 10;
+        private readonly char[] digits;      
 
         public GeneratorManager()
         {
@@ -40,7 +35,7 @@ namespace FileGenerator
                     {
                         if (resultGetFileSize.Item2 < fileSizeMB)
                         {
-                            var blocks = await GenerateFileBlockMultipleAsync(numberOfParallelBlocks);
+                            var blocks = await GenerateFileBlockMultipleAsync(Consts.NUMBER_OF_PARALLEL_BLOCKS);
                             var blockSizeMB = GetBlockSizeMB(blocks);
 
                             if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
@@ -82,8 +77,8 @@ namespace FileGenerator
                 if (fileInfo.Exists)
                 {
                     long fileSizeInBytes = fileInfo.Length;
-                    double fileSizeInKilobytes = fileSizeInBytes / fileSizeConst;
-                    double fileSizeInMegabytes = fileSizeInKilobytes / fileSizeConst;
+                    double fileSizeInKilobytes = fileSizeInBytes / Consts.KILOBYTE_SIZE;
+                    double fileSizeInMegabytes = fileSizeInKilobytes / Consts.KILOBYTE_SIZE;
                     return (true, fileSizeInMegabytes, string.Empty);
                 }
                 else
@@ -101,14 +96,14 @@ namespace FileGenerator
         {
             var stringList = new List<string>();
             var linesCounter = 0;
-            while (linesCounter < blockSize)
+            while (linesCounter < Consts.BLOCK_SIZE)
             {
-                var lengthDigits = random.Next(1, digitsMaxLength);
-                var lengthLetters = random.Next(1, lettersMaxLength);
-                var numberOfRepetions = random.Next(1, repetitionsMax);
+                var lengthDigits = random.Next(1, Consts.DIGITS_MAX_LENGTH);
+                var lengthLetters = random.Next(1, Consts.LELLERES_MAX_LENGTH);
+                var numberOfRepetions = random.Next(1, Consts.REPETIONS_MAX);
                 var randomString = GenerateRandomString(lengthLetters);
 
-                for (int i = 0; i < numberOfRepetions && linesCounter < blockSize; i++)
+                for (int i = 0; i < numberOfRepetions && linesCounter < Consts.BLOCK_SIZE; i++)
                 {
                     var randomNumber = GenerateRandomNumber(lengthDigits);
                     var randomCombinedString = $"{randomNumber}. {randomString}";
@@ -141,18 +136,6 @@ namespace FileGenerator
             return allBlocks;
         }
 
-        private string GenerateFileLine()
-        {
-            var lengthDigits = random.Next(1, digitsMaxLength);
-            var lengthLetters = random.Next(1, lettersMaxLength);
-            var numberOfRepetions = random.Next(1, repetitionsMax);
-            var randomString = GenerateRandomString(lengthLetters);
-            var randomNumber = GenerateRandomNumber(lengthDigits);
-            var randomCombinedString = $"{randomNumber}. {randomString}";
-
-            return randomCombinedString;
-        }
-
         private double GetBlockSizeMB(IEnumerable<string> block)
         {
             var bytes = new List<byte>();
@@ -161,7 +144,7 @@ namespace FileGenerator
                 bytes.AddRange(Encoding.UTF8.GetBytes(line));
             }
 
-            var sizeInMB = (double)bytes.ToArray().Length / (fileSizeConst * fileSizeConst);
+            var sizeInMB = (double)bytes.ToArray().Length / (Consts.KILOBYTE_SIZE * Consts.KILOBYTE_SIZE);
             return sizeInMB;         
         }
 
