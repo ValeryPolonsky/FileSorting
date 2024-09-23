@@ -96,14 +96,14 @@ namespace FileSorting.Generator
         {
             var stringList = new List<string>();
             var linesCounter = 0;
-            while (linesCounter < Consts.BLOCK_SIZE)
+            while (linesCounter < Consts.WRITE_BLOCK_SIZE)
             {
                 var lengthDigits = random.Next(1, Consts.DIGITS_MAX_LENGTH);
                 var lengthLetters = random.Next(1, Consts.LELLERES_MAX_LENGTH);
                 var numberOfRepetions = random.Next(1, Consts.REPETIONS_MAX);
                 var randomString = GenerateRandomString(lengthLetters);
 
-                for (int i = 0; i < numberOfRepetions && linesCounter < Consts.BLOCK_SIZE; i++)
+                for (int i = 0; i < numberOfRepetions && linesCounter < Consts.WRITE_BLOCK_SIZE; i++)
                 {
                     var randomNumber = GenerateRandomNumber(lengthDigits);
                     var randomCombinedString = $"{randomNumber}. {randomString}";
