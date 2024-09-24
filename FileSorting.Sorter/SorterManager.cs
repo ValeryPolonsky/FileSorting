@@ -2,8 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace FileSorting.Sorter
 {
@@ -15,8 +17,14 @@ namespace FileSorting.Sorter
 
         public async Task SortFile(string filePath)
         {
-            await DivideFile(filePath);
-            await SortDividedFiles(filePath);
+            //await DivideFile(filePath);
+            //await SortDividedFiles(filePath);
+
+            MergeSortedFiles("C:\\MyProjects\\Data\\FileSortingTempFolder\\output_1.txt",
+            "C:\\MyProjects\\Data\\FileSortingTempFolder\\output_2.txt",
+            "C:\\MyProjects\\Data\\FileSortingTempFolder\\merged_merge_sort.txt");
+
+            //SortDividedFile("C:\\MyProjects\\Data\\FileSortingTempFolder\\merged_regular_sort.txt");
         }
 
         private Task DivideFile(string filePath)
@@ -101,7 +109,7 @@ namespace FileSorting.Sorter
             
             foreach(var line in lines)
             {
-                var lineSplited = line.Split('.');
+                var lineSplited = line.Split(". ");
                 linesSplited.Add(new Tuple<string, string>(lineSplited[0], lineSplited[1]));
             }
 
@@ -114,43 +122,72 @@ namespace FileSorting.Sorter
                 sortedLines.Add($"{line.Item1}. {line.Item2}");
 
             File.WriteAllLines(filePath, sortedLines);
+        }       
+
+        private void MergeSortedFiles(string file1Path, string file2Path, string outputFilePath)
+        {
+            using (var reader1 = new StreamReader(file1Path))
+            using (var reader2 = new StreamReader(file2Path))
+            using (var writer = new StreamWriter(outputFilePath))
+            {
+                string line1 = reader1.ReadLine();
+                string line2 = reader2.ReadLine();
+
+                while (line1 != null || line2 != null)
+                {
+                    if (line1 == null)
+                    {
+                        writer.WriteLine(line2);
+                        line2 = reader2.ReadLine();
+                    }
+                    else if (line2 == null)
+                    {
+                        writer.WriteLine(line1);
+                        line1 = reader1.ReadLine();
+                    }
+                    else
+                    {
+                        if (IsFirstLineSmaller(line1, line2))
+                        {
+                            writer.WriteLine(line1);
+                            line1 = reader1.ReadLine();
+                        }
+                        else
+                        {
+                            writer.WriteLine(line2);
+                            line2 = reader2.ReadLine();
+                        }
+                    }
+                }
+            }
         }
 
-        public LineOrder CompareLines(string line1, string line2)
+        private bool IsFirstLineSmaller(string line1, string line2)
         {
-            var splitedLine1 = line1.Split('.');
-            var splitedLine2 = line2.Split('.');
+            // Split into number part and string part
+            var split1 = line1.Split(new[] { ". " }, 2, StringSplitOptions.None);
+            var split2 = line2.Split(new[] { ". " }, 2, StringSplitOptions.None);
 
-            var stringPartOrderResult = string.Compare(splitedLine1[1], 
-                splitedLine2[1], 
-                StringComparison.Ordinal);
-            var stringPartOrder = LineOrder.Unknown;
-            var numberPartOrder = LineOrder.Unknown;
-            
-            if (stringPartOrderResult < 0)
-                stringPartOrder = LineOrder.Line1BeforeLine2;        
-            else if (stringPartOrderResult > 0)
-                stringPartOrder = LineOrder.Line2BeforeLine1;           
-            else
-                stringPartOrder = LineOrder.Line1AndLine2AreEqual;
+            string textPart1 = split1[1];
+            string textPart2 = split2[1];
 
-            if (stringPartOrder != LineOrder.Line1AndLine2AreEqual)
-                return stringPartOrder;
-            else
+            // First compare by string part
+            int stringComparison = string.Compare(textPart1, textPart2, StringComparison.Ordinal);
+            if (stringComparison != 0)
             {
-                var numberPartOrderResult = string.Compare(splitedLine1[0],
-                splitedLine2[0],
-                StringComparison.Ordinal);
-
-                if (numberPartOrderResult < 0)
-                    numberPartOrder = LineOrder.Line1BeforeLine2;
-                else if (numberPartOrderResult > 0)
-                    numberPartOrder = LineOrder.Line2BeforeLine1;
-                else
-                    numberPartOrder = LineOrder.Line1AndLine2AreEqual;
-
-                return numberPartOrder;
+                return stringComparison < 0;
             }
+
+            // If string part is the same, compare by number part
+            //var numberPart1 = BigInteger.Parse(split1[0]);
+            //var numberPart2 = BigInteger.Parse(split2[0]);
+            //return numberPart1 < numberPart2;
+
+            // If string part is the same, compare by number part
+            string numberPart1 = split1[0];
+            string numberPart2 = split2[0];
+            int numberComparison = string.Compare(numberPart1, numberPart2, StringComparison.Ordinal);
+            return numberComparison < 0;           
         }
     }
 }

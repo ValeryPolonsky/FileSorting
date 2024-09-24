@@ -2,8 +2,8 @@
 {
     public static class Consts
     {
-        public const int DIGITS_MAX_LENGTH = 100;
-        public const int LELLERES_MAX_LENGTH = 100;
+        public const int DIGITS_MAX_LENGTH = 10;
+        public const int LELLERES_MAX_LENGTH = 10;
         public const int REPETIONS_MAX = 5;
         public const int WRITE_BLOCK_SIZE = 1000;
         public const double KILOBYTE_SIZE = 1024.0;

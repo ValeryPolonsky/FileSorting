@@ -17,7 +17,8 @@ namespace FileSorting.Generator
         public GeneratorManager()
         {
             random = new Random();
-            letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ".ToCharArray();
+            //letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ".ToCharArray();
+            letters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
             digits = "0123456789".ToCharArray();
         }
 
