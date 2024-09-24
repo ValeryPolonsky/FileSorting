@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FileSorting.Common
+namespace FileSorting.Common.Enums
 {
     public enum LineOrder
     {

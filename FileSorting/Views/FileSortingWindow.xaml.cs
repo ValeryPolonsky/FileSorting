@@ -14,9 +14,9 @@ namespace FileSorting
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class FileSortingWindow : Window
     {
-        public MainWindow()
+        public FileSortingWindow()
         {
             InitializeComponent();
         }

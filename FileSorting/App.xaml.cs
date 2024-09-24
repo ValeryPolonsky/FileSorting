@@ -1,4 +1,5 @@
-﻿using System.Configuration;
+﻿using FileSorting.ViewModels;
+using System.Configuration;
 using System.Data;
 using System.Windows;
 
@@ -9,12 +10,11 @@ namespace FileSorting
     /// </summary>
     public partial class App : Application
     {
-        private async void Application_Startup(object sender, StartupEventArgs e)
+        private void Application_Startup(object sender, StartupEventArgs e)
         {
-            //var result = await FileSortingManager.Instance.GenerateFileAsync("C:\\MyProjects\\Data\\FileSorting.txt",300);
-            var result = await FileSortingManager.Instance.SortFileAsync("C:\\MyProjects\\Data\\FileSorting.txt");
-
-            var mainWindow = new MainWindow();
+            var fileSortingViewModel = new FileSortingViewModel();
+            var mainWindow = new FileSortingWindow();
+            mainWindow.DataContext = fileSortingViewModel;
             mainWindow.Show();
         }
     }
