@@ -83,8 +83,8 @@ namespace FileSorting
 
         public async Task<(bool, string)> SortFileAsync(string filePath)
         {
-            await sorterManager.SortFile(filePath);
-            return (true, string.Empty);
+            var result = await sorterManager.SortFile(filePath);
+            return result;
         }
     }
 }

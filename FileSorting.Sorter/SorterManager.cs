@@ -15,17 +15,24 @@ namespace FileSorting.Sorter
         { 
         }
 
-        public async Task SortFile(string sourceFilePath)
+        public async Task<(bool, string)> SortFile(string sourceFilePath)
         {
-            await DivideFile(sourceFilePath);
-            await SortDividedFiles(sourceFilePath);
-            await MergeSortedFiles(sourceFilePath);
-            await MoveSortedFileToSourceLocation(sourceFilePath);
+            var result = await DivideFile(sourceFilePath);
+            if (!result.Item1) return result;
+            
+            result = await SortDividedFiles(sourceFilePath);
+            if (!result.Item1) return result;
+            
+            result = await MergeSortedFiles(sourceFilePath);
+            if (!result.Item1) return result;
+            
+            result = await MoveSortedFileToSourceLocation(sourceFilePath);
+            return result;
         }
 
-        private Task DivideFile(string sourceFilePath)
+        private async Task<(bool,string)> DivideFile(string sourceFilePath)
         {
-            return Task.Run(() => 
+            try
             {
                 string folderPath = Path.GetDirectoryName(sourceFilePath);
                 string dividedFilesDirectory = Path.Combine(folderPath, Consts.FILE_SORTING_TEMP_FOLDER);  // Number of lines per split file
@@ -46,7 +53,7 @@ namespace FileSorting.Sorter
 
                     try
                     {
-                        while ((line = reader.ReadLine()) != null)
+                        while ((line = await reader.ReadLineAsync()) != null)
                         {
                             // Create a new file for every `linesPerFile` lines
                             if (lineCount % Consts.READ_BLOCK_SIZE == 0)
@@ -61,7 +68,7 @@ namespace FileSorting.Sorter
                                 fileCounter++;
                             }
 
-                            writer.WriteLine(line);
+                            await writer.WriteLineAsync(line);
                             lineCount++;
                         }
                     }
@@ -74,28 +81,42 @@ namespace FileSorting.Sorter
                         }
                     }
                 }
-            });           
+
+                return (true, string.Empty);
+            }
+            catch(Exception ex)
+            {
+                return (false, ex.Message);
+            }          
         }
 
-        private async Task SortDividedFiles(string sourceFilePath)
+        private async Task<(bool,string)> SortDividedFiles(string sourceFilePath)
         {
-            string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-            var files = Directory.GetFiles(dividedFilesDirectory);
-            var semaphoreSlim = new SemaphoreSlim(Consts.NUMBER_OF_PARALLEL_READERS);
-            var tasks = files.Select(async file =>
+            try
             {
-                await semaphoreSlim.WaitAsync();
-                try
+                string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                var files = Directory.GetFiles(dividedFilesDirectory);
+                var semaphoreSlim = new SemaphoreSlim(Consts.NUMBER_OF_PARALLEL_READERS);
+                var tasks = files.Select(async file =>
                 {
-                    SortDividedFile(file);
-                }
-                finally
-                {
-                    semaphoreSlim.Release();
-                }
-            });
+                    await semaphoreSlim.WaitAsync();
+                    try
+                    {
+                        SortDividedFile(file);
+                    }
+                    finally
+                    {
+                        semaphoreSlim.Release();
+                    }
+                });
 
-            await Task.WhenAll(tasks);
+                await Task.WhenAll(tasks);
+                return (true, string.Empty);
+            }
+            catch(Exception ex)
+            {
+                return (false, ex.Message);
+            }
         }
 
         private void SortDividedFile(string filePath)
@@ -120,9 +141,9 @@ namespace FileSorting.Sorter
             File.WriteAllLines(filePath, sortedLines);
         }  
         
-        private Task MergeSortedFiles(string sourceFilePath)
+        private async Task<(bool,string)> MergeSortedFiles(string sourceFilePath)
         {
-            return Task.Run(() =>
+            try
             {
                 var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
                 var merged_files_counter = 1;
@@ -137,48 +158,54 @@ namespace FileSorting.Sorter
                     {
                         if (i < files.Length - 1)
                         {
-                            MergeSortedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
+                            await MergeSortedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
                             File.Delete(files[i]);
                             File.Delete(files[i + 1]);
                             merged_files_counter++;
                         }
                     }
                 }
-            });        
+
+                return (true, string.Empty);
+            }
+            catch(Exception ex)
+            {
+                return (false, ex.Message);
+            }
         }
 
-        private void MergeSortedFiles(string file1Path, string file2Path, string outputFilePath)
+        private async Task MergeSortedFiles(string file1Path, string file2Path, string outputFilePath)
         {
             using (var reader1 = new StreamReader(file1Path))
             using (var reader2 = new StreamReader(file2Path))
             using (var writer = new StreamWriter(outputFilePath))
             {
-                string line1 = reader1.ReadLine();
-                string line2 = reader2.ReadLine();
+                string line1 = await reader1.ReadLineAsync();
+                string line2 = await reader2.ReadLineAsync();
 
                 while (line1 != null || line2 != null)
                 {
                     if (line1 == null)
                     {
                         writer.WriteLine(line2);
-                        line2 = reader2.ReadLine();
+                        line2 = await reader2.ReadLineAsync();
                     }
                     else if (line2 == null)
                     {
                         writer.WriteLine(line1);
-                        line1 = reader1.ReadLine();
+                        line1 = await reader1.ReadLineAsync();
                     }
                     else
                     {
                         if (IsFirstLineSmaller(line1, line2))
                         {
                             writer.WriteLine(line1);
-                            line1 = reader1.ReadLine();
+                            line1 = await reader1.ReadLineAsync();
                         }
                         else
                         {
                             writer.WriteLine(line2);
-                            line2 = reader2.ReadLine();
+                            line2 = await reader2.ReadLineAsync();
                         }
                     }
                 }
@@ -202,29 +229,33 @@ namespace FileSorting.Sorter
             }
 
             // If string part is the same, compare by number part
-            //var numberPart1 = BigInteger.Parse(split1[0]);
-            //var numberPart2 = BigInteger.Parse(split2[0]);
-            //return numberPart1 < numberPart2;
-
-            // If string part is the same, compare by number part
             string numberPart1 = split1[0];
             string numberPart2 = split2[0];
             int numberComparison = string.Compare(numberPart1, numberPart2, StringComparison.Ordinal);
             return numberComparison < 0;           
         }
 
-        private Task MoveSortedFileToSourceLocation(string sourceFilePath)
+        private Task<(bool,string)> MoveSortedFileToSourceLocation(string sourceFilePath)
         {
             return Task.Run(() => 
             {
-                var sourceDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-                var targetDirectory = Path.GetDirectoryName(sourceFilePath);
-                var files = Directory.GetFiles(sourceDirectory);
+                try
+                {
+                    var sourceDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var targetDirectory = Path.GetDirectoryName(sourceFilePath);
+                    var files = Directory.GetFiles(sourceDirectory);
 
-                var newFileName = $"{Path.GetFileNameWithoutExtension(sourceFilePath)}_sorted.txt";
-                var targetFilePath = Path.Combine(targetDirectory, newFileName);
-                File.Move(files.FirstOrDefault(), targetFilePath);
-                Directory.Delete(sourceDirectory);
+                    var newFileName = $"{Path.GetFileNameWithoutExtension(sourceFilePath)}_sorted.txt";
+                    var targetFilePath = Path.Combine(targetDirectory, newFileName);
+                    File.Move(files.FirstOrDefault(), targetFilePath);
+                    Directory.Delete(sourceDirectory);
+
+                    return (true, string.Empty);
+                }
+                catch(Exception ex)
+                {
+                    return (false, ex.Message);
+                }
             });            
         }
     }

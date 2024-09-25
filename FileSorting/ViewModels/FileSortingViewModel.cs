@@ -48,14 +48,22 @@ namespace FileSorting.ViewModels
         public string GenerateFileName
         {
             get => generateFileName;
-            set => SetProperty(ref generateFileName, value);
+            set
+            {
+                SetProperty(ref generateFileName, value);
+                GenerateFileCommand.NotifyCanExecuteChanged();
+            }
         }
 
-        private double generateFileSizeMB;
-        public double GenerateFileSizeMB
+        private double? generateFileSizeMB;
+        public double? GenerateFileSizeMB
         {
             get => generateFileSizeMB;
-            set => SetProperty(ref generateFileSizeMB, value);
+            set
+            {
+                SetProperty(ref generateFileSizeMB, value);
+                GenerateFileCommand.NotifyCanExecuteChanged();
+            }
         }
 
         public RelayCommand SelectDirectoryCommand { get; private set; }
@@ -63,30 +71,43 @@ namespace FileSorting.ViewModels
         {
             folderPath = FileSortingManager.Instance.OpenFolderBrowserDialog();
             AddMessage($"Folder [{folderPath}] selected");
+            GenerateFileCommand.NotifyCanExecuteChanged();
         }
         private bool SelectDirectoryCommandCanExecute() => true;
 
         public RelayCommand GenerateFileCommand { get; private set; }
         private async void GenerateFileCommandExecute()
         {
-            if (string.IsNullOrEmpty(folderPath))
+            if (string.IsNullOrEmpty(folderPath) || 
+                string.IsNullOrEmpty(GenerateFileName) ||
+                GenerateFileSizeMB == null)
                 return;
 
             var filePath = Path.Combine(folderPath, $"{GenerateFileName}.txt");
             AddMessage($"File [{filePath}] generation started");
-            var result = await FileSortingManager.Instance.GenerateFileAsync(folderPath, GenerateFileName, GenerateFileSizeMB);
+            var result = await FileSortingManager.Instance.GenerateFileAsync(folderPath, GenerateFileName, GenerateFileSizeMB.Value);
             if (result.Item1)
                 AddMessage($"File [{filePath}] generation finished successfully");
             else
                 AddMessage($"File [{filePath}] generation failed, error: {result.Item2}");
         }
-        private bool GenerateFileCommandCanExecute() => true;
+        private bool GenerateFileCommandCanExecute()
+        {
+            if (string.IsNullOrEmpty(folderPath) ||               
+                string.IsNullOrEmpty(GenerateFileName) ||
+                GenerateFileSizeMB == null ||
+                GenerateFileSizeMB == 0.0)
+                return false;
+
+            return true;
+        }
 
         public RelayCommand SelectFileCommand { get; private set; }
         private void SelectFileCommandExecute()
         {
             filePath = FileSortingManager.Instance.OpenFileBrowserDialog();
             AddMessage($"File [{filePath}] selected");
+            SortFileCommand.NotifyCanExecuteChanged();
         }
         private bool SelectFileCommandCanExecute() => true;
 
@@ -103,7 +124,13 @@ namespace FileSorting.ViewModels
             else
                 AddMessage($"File [{filePath}] sorting failed, error: {result.Item2}");
         }
-        private bool SortFileCommandCanExecute() => true;
+        private bool SortFileCommandCanExecute()
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return false;
+
+            return true;
+        }
 
         private void AddMessage(string content)
         {

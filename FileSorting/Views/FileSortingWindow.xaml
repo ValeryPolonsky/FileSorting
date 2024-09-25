@@ -26,6 +26,7 @@
                 <ComboBox ItemsSource="{Binding AvailableModes}"
                           SelectedItem="{Binding SelectedMode}"
                           DisplayMemberPath="Description"
+                          IsReadOnly="True"
                           Width="200"/>
             </StackPanel>
             <StackPanel Grid.Row="1"
