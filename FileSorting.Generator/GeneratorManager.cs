@@ -22,7 +22,44 @@ namespace FileSorting.Generator
             digits = "0123456789".ToCharArray();
         }
 
-        public async Task<(bool,string)> GenerateFileAsync(string filePath, double fileSizeMB)
+        public async Task<(bool, string)> GenerateFileAsync(string sourceFilePath, double fileSizeMB)
+        {
+            var result = await GenerateFileInternalAsync(sourceFilePath, fileSizeMB);
+            if (!result.Item1) return result;
+
+            result = await MergeDividedFiles(sourceFilePath);
+            if (!result.Item1) return result;
+
+            result = await MoveGeneratedFileToSourceLocation(sourceFilePath);
+            return result;
+        }
+
+        private async Task<(bool, string)> GenerateFileInternalAsync(string sourceFilePath, double fileSizeMB)
+        {
+            var folderPath = Path.GetDirectoryName(sourceFilePath);
+            var dividedFilesDirectory = Path.Combine(folderPath, Consts.FILE_SORTING_TEMP_FOLDER);
+            var tasks = new List<Task>();
+
+            if (Directory.Exists(dividedFilesDirectory))
+                Directory.Delete(dividedFilesDirectory, true);
+
+            Directory.CreateDirectory(dividedFilesDirectory);
+
+            for (int i = 1; i <= Consts.NUMBER_OF_PARALLEL_WRITE_FILES; i++)
+            {
+                var task = Task.Run(async () =>
+                {
+                    var outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{Guid.NewGuid()}.txt");
+                    await GenerateFileSingleAsync(outputFilePath, fileSizeMB / Consts.NUMBER_OF_PARALLEL_WRITE_FILES);
+                });
+                tasks.Add(task);
+            }
+            await Task.WhenAll(tasks.ToArray());
+
+            return (true, string.Empty);
+        }
+
+        private async Task<(bool,string)> GenerateFileSingleAsync(string filePath, double fileSizeMB)
         {
             try
             {
@@ -184,6 +221,89 @@ namespace FileSorting.Generator
             }
 
             return builder.ToString();
+        }
+
+        private Task<(bool, string)> MergeDividedFiles(string sourceFilePath)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var merged_files_counter = 1;
+
+                    while (true)
+                    {
+                        var files = Directory.GetFiles(dividedFilesDirectory);
+                        if (files.Length == 1)
+                            break;
+
+                        for (int i = 0; i < files.Length; i += 2)
+                        {
+                            if (i < files.Length - 1)
+                            {
+                                MergeDividedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
+                                File.Delete(files[i]);
+                                File.Delete(files[i + 1]);
+                                merged_files_counter++;
+                            }
+                        }
+                    }
+
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });
+        }
+
+        private void MergeDividedFiles(string file1Path, string file2Path, string outputFilePath)
+        {
+            using (var reader1 = new StreamReader(file1Path))
+            using (var reader2 = new StreamReader(file2Path))
+            using (var writer = new StreamWriter(outputFilePath))
+            {
+                string line1 = reader1.ReadLine();
+                string line2 = reader2.ReadLine();
+
+                while (line1 != null || line2 != null)
+                {
+                    if (line1 != null)                    
+                        writer.WriteLine(line1);
+                    
+                    if (line2 != null)                   
+                        writer.WriteLine(line2);
+
+                    line1 = reader1.ReadLine();
+                    line2 = reader2.ReadLine();
+                }
+            }
+        }
+
+        private Task<(bool, string)> MoveGeneratedFileToSourceLocation(string sourceFilePath)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    var sourceDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var targetDirectory = Path.GetDirectoryName(sourceFilePath);
+                    var files = Directory.GetFiles(sourceDirectory);
+
+                    var newFileName = $"{Path.GetFileNameWithoutExtension(sourceFilePath)}.txt";
+                    var targetFilePath = Path.Combine(targetDirectory, newFileName);
+                    File.Move(files.FirstOrDefault(), targetFilePath);
+                    Directory.Delete(sourceDirectory);
+
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });
         }
     }
 }

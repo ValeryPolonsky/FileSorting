@@ -8,6 +8,7 @@
         public const int WRITE_BLOCK_SIZE = 1000;
         public const double KILOBYTE_SIZE = 1024.0;
         public const int NUMBER_OF_PARALLEL_BLOCKS = 10;
+        public const int NUMBER_OF_PARALLEL_WRITE_FILES = 10;
         public const string FILE_SORTING_TEMP_FOLDER = "FileSortingTempFolder";
         public const int READ_BLOCK_SIZE = 100000;
         public const int NUMBER_OF_PARALLEL_READERS = 10;
