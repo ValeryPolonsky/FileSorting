@@ -57,6 +57,23 @@ namespace FileSorting
             return null;
         }
 
+        public string? OpenFileBrowserDialog()
+        {
+            var folderDialog = new OpenFileDialog
+            {
+                Title = "Select Folder",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+            };
+
+            if (folderDialog.ShowDialog() == true)
+            {
+                var fileName = folderDialog.FileName;
+                return fileName;
+            }
+
+            return null;
+        }
+
         public async Task<(bool, string)> GenerateFileAsync(string folderName, string fileName, double fileSizeMB)
         {
             var filePath = Path.Combine(folderName, $"{fileName}.txt");  
