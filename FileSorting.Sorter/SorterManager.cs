@@ -30,93 +30,99 @@ namespace FileSorting.Sorter
             return result;
         }
 
-        private async Task<(bool,string)> DivideFile(string sourceFilePath)
+        private Task<(bool,string)> DivideFile(string sourceFilePath)
         {
-            try
+            return Task.Run(() => 
             {
-                string folderPath = Path.GetDirectoryName(sourceFilePath);
-                string dividedFilesDirectory = Path.Combine(folderPath, Consts.FILE_SORTING_TEMP_FOLDER);  // Number of lines per split file
-
-                if (Directory.Exists(dividedFilesDirectory))
-                    Directory.Delete(dividedFilesDirectory, true);
-
-                // Ensure the output directory exists
-                Directory.CreateDirectory(dividedFilesDirectory);
-
-                // Open the input file for reading
-                using (StreamReader reader = new StreamReader(sourceFilePath))
+                try
                 {
-                    int fileCounter = 1;
-                    string line;
-                    int lineCount = 0;
-                    StreamWriter writer = null;
+                    string folderPath = Path.GetDirectoryName(sourceFilePath);
+                    string dividedFilesDirectory = Path.Combine(folderPath, Consts.FILE_SORTING_TEMP_FOLDER);  // Number of lines per split file
 
-                    try
+                    if (Directory.Exists(dividedFilesDirectory))
+                        Directory.Delete(dividedFilesDirectory, true);
+
+                    // Ensure the output directory exists
+                    Directory.CreateDirectory(dividedFilesDirectory);
+
+                    // Open the input file for reading
+                    using (StreamReader reader = new StreamReader(sourceFilePath))
                     {
-                        while ((line = await reader.ReadLineAsync()) != null)
+                        int fileCounter = 1;
+                        string line;
+                        int lineCount = 0;
+                        StreamWriter writer = null;
+
+                        try
                         {
-                            // Create a new file for every `linesPerFile` lines
-                            if (lineCount % Consts.READ_BLOCK_SIZE == 0)
+                            while ((line = reader.ReadLine()) != null)
                             {
-                                if (writer != null)
+                                // Create a new file for every `linesPerFile` lines
+                                if (lineCount % Consts.READ_BLOCK_SIZE == 0)
                                 {
-                                    writer.Close();
+                                    if (writer != null)
+                                    {
+                                        writer.Close();
+                                    }
+
+                                    string outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{fileCounter}.txt");
+                                    writer = new StreamWriter(outputFilePath);
+                                    fileCounter++;
                                 }
 
-                                string outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{fileCounter}.txt");
-                                writer = new StreamWriter(outputFilePath);
-                                fileCounter++;
+                                writer.WriteLine(line);
+                                lineCount++;
                             }
-
-                            await writer.WriteLineAsync(line);
-                            lineCount++;
                         }
-                    }
-                    finally
-                    {
-                        // Ensure the last writer is closed properly
-                        if (writer != null)
+                        finally
                         {
-                            writer.Close();
+                            // Ensure the last writer is closed properly
+                            if (writer != null)
+                            {
+                                writer.Close();
+                            }
                         }
                     }
-                }
 
-                return (true, string.Empty);
-            }
-            catch(Exception ex)
-            {
-                return (false, ex.Message);
-            }          
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });                 
         }
 
-        private async Task<(bool,string)> SortDividedFiles(string sourceFilePath)
+        private Task<(bool,string)> SortDividedFiles(string sourceFilePath)
         {
-            try
+            return Task.Run(async () =>
             {
-                string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-                var files = Directory.GetFiles(dividedFilesDirectory);
-                var semaphoreSlim = new SemaphoreSlim(Consts.NUMBER_OF_PARALLEL_READERS);
-                var tasks = files.Select(async file =>
+                try
                 {
-                    await semaphoreSlim.WaitAsync();
-                    try
+                    string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var files = Directory.GetFiles(dividedFilesDirectory);
+                    var semaphoreSlim = new SemaphoreSlim(Consts.NUMBER_OF_PARALLEL_READERS);
+                    var tasks = files.Select(async file =>
                     {
-                        SortDividedFile(file);
-                    }
-                    finally
-                    {
-                        semaphoreSlim.Release();
-                    }
-                });
+                        await semaphoreSlim.WaitAsync();
+                        try
+                        {
+                            SortDividedFile(file);
+                        }
+                        finally
+                        {
+                            semaphoreSlim.Release();
+                        }
+                    });
 
-                await Task.WhenAll(tasks);
-                return (true, string.Empty);
-            }
-            catch(Exception ex)
-            {
-                return (false, ex.Message);
-            }
+                    await Task.WhenAll(tasks);
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });          
         }
 
         private void SortDividedFile(string filePath)
@@ -141,71 +147,74 @@ namespace FileSorting.Sorter
             File.WriteAllLines(filePath, sortedLines);
         }  
         
-        private async Task<(bool,string)> MergeSortedFiles(string sourceFilePath)
+        private Task<(bool,string)> MergeSortedFiles(string sourceFilePath)
         {
-            try
+            return Task.Run(() => 
             {
-                var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-                var merged_files_counter = 1;
-
-                while (true)
+                try
                 {
-                    var files = Directory.GetFiles(dividedFilesDirectory);
-                    if (files.Length == 1)
-                        break;
+                    var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var merged_files_counter = 1;
 
-                    for (int i = 0; i < files.Length; i += 2)
+                    while (true)
                     {
-                        if (i < files.Length - 1)
+                        var files = Directory.GetFiles(dividedFilesDirectory);
+                        if (files.Length == 1)
+                            break;
+
+                        for (int i = 0; i < files.Length; i += 2)
                         {
-                            await MergeSortedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
-                            File.Delete(files[i]);
-                            File.Delete(files[i + 1]);
-                            merged_files_counter++;
+                            if (i < files.Length - 1)
+                            {
+                                MergeSortedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
+                                File.Delete(files[i]);
+                                File.Delete(files[i + 1]);
+                                merged_files_counter++;
+                            }
                         }
                     }
-                }
 
-                return (true, string.Empty);
-            }
-            catch(Exception ex)
-            {
-                return (false, ex.Message);
-            }
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });        
         }
 
-        private async Task MergeSortedFiles(string file1Path, string file2Path, string outputFilePath)
+        private void MergeSortedFiles(string file1Path, string file2Path, string outputFilePath)
         {
             using (var reader1 = new StreamReader(file1Path))
             using (var reader2 = new StreamReader(file2Path))
             using (var writer = new StreamWriter(outputFilePath))
             {
-                string line1 = await reader1.ReadLineAsync();
-                string line2 = await reader2.ReadLineAsync();
+                string line1 = reader1.ReadLine();
+                string line2 = reader2.ReadLine();
 
                 while (line1 != null || line2 != null)
                 {
                     if (line1 == null)
                     {
                         writer.WriteLine(line2);
-                        line2 = await reader2.ReadLineAsync();
+                        line2 = reader2.ReadLine();
                     }
                     else if (line2 == null)
                     {
                         writer.WriteLine(line1);
-                        line1 = await reader1.ReadLineAsync();
+                        line1 = reader1.ReadLine();
                     }
                     else
                     {
                         if (IsFirstLineSmaller(line1, line2))
                         {
                             writer.WriteLine(line1);
-                            line1 = await reader1.ReadLineAsync();
+                            line1 = reader1.ReadLine();
                         }
                         else
                         {
                             writer.WriteLine(line2);
-                            line2 = await reader2.ReadLineAsync();
+                            line2 = reader2.ReadLine();
                         }
                     }
                 }
