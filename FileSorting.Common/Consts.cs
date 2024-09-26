@@ -11,7 +11,7 @@
         public const int SUB_BLOCK_STEP = 100;
         public const int NUMBER_OF_PARALLEL_WRITERS = 20;
         public const string FILE_SORTING_TEMP_FOLDER = "FileSortingTempFolder";
-        public const int READ_BLOCK_SIZE = 100000;
+        public const int READ_BLOCK_SIZE = 10000;
         public const int NUMBER_OF_PARALLEL_READERS = 20;
     }
 }
