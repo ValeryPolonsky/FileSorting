@@ -10,6 +10,12 @@ namespace FileSorting.Models
 {
     public class ProgramModeModel : ObservableObject
     {
+        public ProgramModeModel()
+        {
+            description = string.Empty;
+            mode = ProgramMode.Unknown;
+        }
+
         private string description;
         public string Description 
         {

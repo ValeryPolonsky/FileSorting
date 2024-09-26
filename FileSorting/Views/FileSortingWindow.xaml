@@ -5,12 +5,17 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FileSorting"
         xmlns:enums ="clr-namespace:FileSorting.Common.Enums;assembly=FileSorting.Common"
+        xmlns:converters ="clr-namespace:FileSorting.Views.Converters"
         mc:Ignorable="d"
         Title="FileSorting" 
         Height="450" 
         Width="800"
         WindowStartupLocation="CenterScreen">
-    <Grid Margin="5,5,5,5">
+    <Window.Resources>
+        <converters:BooleanInverterConverter x:Key="BooleanInverterConverter"/>
+    </Window.Resources>
+    <Grid Margin="5,5,5,5"
+          IsEnabled="{Binding IsProcessingFile, Converter={StaticResource BooleanInverterConverter}}">
         <Grid HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
             <Grid.RowDefinitions>

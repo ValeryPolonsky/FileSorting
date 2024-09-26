@@ -9,6 +9,12 @@ namespace FileSorting.Models
 {
     public class MessageModel:ObservableObject
     {
+        public MessageModel()
+        {
+            updateTime = DateTime.Now;
+            content = string.Empty;
+        }
+
         private DateTime updateTime;
         public DateTime UpdateTime 
         {

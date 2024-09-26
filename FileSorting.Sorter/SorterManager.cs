@@ -11,86 +11,26 @@ namespace FileSorting.Sorter
 {
     public class SorterManager
     {
+        #region Constructor
         public SorterManager() 
         { 
         }
+        #endregion
 
+        #region Sorters
         public async Task<(bool, string)> SortFile(string sourceFilePath)
         {
             var result = await DivideFile(sourceFilePath);
             if (!result.Item1) return result;
-            
+
             result = await SortDividedFiles(sourceFilePath);
             if (!result.Item1) return result;
-            
+
             result = await MergeSortedFiles(sourceFilePath);
             if (!result.Item1) return result;
-            
+
             result = await MoveSortedFileToSourceLocation(sourceFilePath);
             return result;
-        }
-
-        private Task<(bool,string)> DivideFile(string sourceFilePath)
-        {
-            return Task.Run(() => 
-            {
-                try
-                {
-                    string folderPath = Path.GetDirectoryName(sourceFilePath);
-                    string dividedFilesDirectory = Path.Combine(folderPath, Consts.FILE_SORTING_TEMP_FOLDER);  // Number of lines per split file
-
-                    if (Directory.Exists(dividedFilesDirectory))
-                        Directory.Delete(dividedFilesDirectory, true);
-
-                    // Ensure the output directory exists
-                    Directory.CreateDirectory(dividedFilesDirectory);
-
-                    // Open the input file for reading
-                    using (StreamReader reader = new StreamReader(sourceFilePath))
-                    {
-                        int fileCounter = 1;
-                        string line;
-                        int lineCount = 0;
-                        StreamWriter writer = null;
-
-                        try
-                        {
-                            while ((line = reader.ReadLine()) != null)
-                            {
-                                // Create a new file for every `linesPerFile` lines
-                                if (lineCount % Consts.READ_BLOCK_SIZE == 0)
-                                {
-                                    if (writer != null)
-                                    {
-                                        writer.Close();
-                                    }
-
-                                    string outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{fileCounter}.txt");
-                                    writer = new StreamWriter(outputFilePath);
-                                    fileCounter++;
-                                }
-
-                                writer.WriteLine(line);
-                                lineCount++;
-                            }
-                        }
-                        finally
-                        {
-                            // Ensure the last writer is closed properly
-                            if (writer != null)
-                            {
-                                writer.Close();
-                            }
-                        }
-                    }
-
-                    return (true, string.Empty);
-                }
-                catch (Exception ex)
-                {
-                    return (false, ex.Message);
-                }
-            });                 
         }
 
         private Task<(bool,string)> SortDividedFiles(string sourceFilePath)
@@ -99,25 +39,29 @@ namespace FileSorting.Sorter
             {
                 try
                 {
-                    string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var directoryName = Path.GetDirectoryName(sourceFilePath);
+                    if (string.IsNullOrEmpty(directoryName))
+                        return (false, "directoryName is null or empty");
+
+                    string dividedFilesDirectory = Path.Combine(directoryName, Consts.FILE_SORTING_TEMP_FOLDER);
                     var files = Directory.GetFiles(dividedFilesDirectory);
                     var tasks = new List<Task>();
                     var bufferCounter = 0;
                   
-                    for (int i = 0; i < files.Length; i++)
+                    for (int fileIndex = 0; fileIndex < files.Length; fileIndex++)
                     {
                         if (bufferCounter < Consts.NUMBER_OF_PARALLEL_READERS)
                         {
-                            int capturedI = i;
+                            int capturedFileIndexI = fileIndex;
                             tasks.Add(Task.Run(() =>
                             {
-                                SortDividedFile(files[capturedI]);
+                                SortDividedFile(files[capturedFileIndexI]);
                             }));
                             bufferCounter++;
                         }
 
                         if (bufferCounter == Consts.NUMBER_OF_PARALLEL_READERS ||
-                            i == files.Length - 1)
+                            fileIndex == files.Length - 1)
                         {
                             await Task.WhenAll(tasks.ToArray());
                             tasks.Clear();
@@ -155,15 +99,21 @@ namespace FileSorting.Sorter
                 sortedLines.Add($"{line.Item1}. {line.Item2}");
 
             File.WriteAllLines(filePath, sortedLines);
-        }  
-        
+        }
+        #endregion
+
+        #region Mergers
         private Task<(bool,string)> MergeSortedFiles(string sourceFilePath)
         {
             return Task.Run(async () => 
             {
                 try
                 {
-                    var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
+                    var directoryName = Path.GetDirectoryName(sourceFilePath);
+                    if (string.IsNullOrEmpty(directoryName))
+                        return (false, "directoryName is null or empty");
+
+                    var dividedFilesDirectory = Path.Combine(directoryName, Consts.FILE_SORTING_TEMP_FOLDER);
                     var tasks = new List<Task>();
                     var bufferCounter = 0;
 
@@ -173,13 +123,13 @@ namespace FileSorting.Sorter
                         if (files.Length == 1)
                             break;
 
-                        for (int i = 0; i < files.Length; i += 2)
+                        for (int fileIndex = 0; fileIndex < files.Length; fileIndex += 2)
                         {
                             if (bufferCounter < Consts.NUMBER_OF_PARALLEL_READERS &&
-                                i < files.Length - 1)
+                                fileIndex < files.Length - 1)
                             {
-                                int capturedI = i;
-                                int capturedIplus1 = i + 1;
+                                int capturedI = fileIndex;
+                                int capturedIplus1 = fileIndex + 1;
                                 tasks.Add(Task.Run(() =>
                                 {
                                     MergeSortedFiles(files[capturedI], files[capturedIplus1], Path.Combine(dividedFilesDirectory, $"merged_{Guid.NewGuid()}.txt"));
@@ -190,7 +140,7 @@ namespace FileSorting.Sorter
                             }
 
                             if (bufferCounter == Consts.NUMBER_OF_PARALLEL_READERS ||
-                                i + 2 >= files.Length - 1)
+                                fileIndex + 2 >= files.Length - 1)
                             {
                                 await Task.WhenAll(tasks.ToArray());
                                 tasks.Clear();
@@ -214,8 +164,8 @@ namespace FileSorting.Sorter
             using (var reader2 = new StreamReader(file2Path))
             using (var writer = new StreamWriter(outputFilePath))
             {
-                string line1 = reader1.ReadLine();
-                string line2 = reader2.ReadLine();
+                var line1 = reader1.ReadLine();
+                var line2 = reader2.ReadLine();
 
                 while (line1 != null || line2 != null)
                 {
@@ -244,6 +194,72 @@ namespace FileSorting.Sorter
                     }
                 }
             }
+        }
+        #endregion
+
+        #region Helpers
+        private Task<(bool, string)> DivideFile(string sourceFilePath)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    var directoryName = Path.GetDirectoryName(sourceFilePath);
+                    if (string.IsNullOrEmpty(directoryName))
+                        return (false, "directoryName is null or empty");
+
+                    string dividedFilesDirectory = Path.Combine(directoryName, Consts.FILE_SORTING_TEMP_FOLDER);  // Number of lines per split file
+
+                    if (Directory.Exists(dividedFilesDirectory))
+                        Directory.Delete(dividedFilesDirectory, true);
+
+                    // Ensure the output directory exists
+                    Directory.CreateDirectory(dividedFilesDirectory);
+
+                    // Open the input file for reading
+                    using (StreamReader reader = new StreamReader(sourceFilePath))
+                    {
+                        int fileCounter = 1;
+                        string? line;
+                        int lineCount = 0;
+                        StreamWriter? writer = null;
+
+                        try
+                        {
+                            while ((line = reader.ReadLine()) != null)
+                            {
+                                if (lineCount % Consts.READ_BLOCK_SIZE == 0)
+                                {
+                                    if (writer != null)
+                                    {
+                                        writer.Close();
+                                    }
+
+                                    string outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{Guid.NewGuid()}.txt");
+                                    writer = new StreamWriter(outputFilePath);
+                                    fileCounter++;
+                                }
+
+                                writer?.WriteLine(line);
+                                lineCount++;
+                            }
+                        }
+                        finally
+                        {
+                            if (writer != null)
+                            {
+                                writer.Close();
+                            }
+                        }
+                    }
+
+                    return (true, string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            });
         }
 
         private bool IsFirstLineSmaller(string line1, string line2)
@@ -275,13 +291,20 @@ namespace FileSorting.Sorter
             {
                 try
                 {
-                    var sourceDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
                     var targetDirectory = Path.GetDirectoryName(sourceFilePath);
+                    if (string.IsNullOrEmpty(targetDirectory))
+                        return (false, "directoryName is null or empty");
+
+                    var sourceDirectory = Path.Combine(targetDirectory, Consts.FILE_SORTING_TEMP_FOLDER);
+
                     var files = Directory.GetFiles(sourceDirectory);
+                    if (files == null || !files.Any())
+                        return (false, "There is no files in sourceDirectory");
 
                     var newFileName = $"{Path.GetFileNameWithoutExtension(sourceFilePath)}_sorted.txt";
                     var targetFilePath = Path.Combine(targetDirectory, newFileName);
-                    File.Move(files.FirstOrDefault(), targetFilePath);
+
+                    File.Move(files.First(), targetFilePath);
                     Directory.Delete(sourceDirectory);
 
                     return (true, string.Empty);
@@ -292,5 +315,6 @@ namespace FileSorting.Sorter
                 }
             });            
         }
+        #endregion
     }
 }

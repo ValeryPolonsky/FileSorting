@@ -16,11 +16,14 @@ namespace FileSorting
 {
     public sealed class FileSortingManager
     {
+        #region Members
         private GeneratorManager generatorManager;
         private SorterManager sorterManager;
         private static readonly Lazy<FileSortingManager> lazy = new Lazy<FileSortingManager>(() => new FileSortingManager());
         public static FileSortingManager Instance => lazy.Value;
+        #endregion
 
+        #region Constructor
         private FileSortingManager()
         {
             generatorManager = new GeneratorManager();
@@ -37,9 +40,13 @@ namespace FileSorting
                 Mode = ProgramMode.FileSorter
             });
         }
+        #endregion
 
+        #region Properties
         public ObservableCollection<ProgramModeModel> AvailableModes { get; private set; }
+        #endregion
 
+        #region Dialogs
         public string? OpenFolderBrowserDialog()
         {
             var folderDialog = new OpenFolderDialog
@@ -73,10 +80,11 @@ namespace FileSorting
 
             return null;
         }
+        #endregion
 
-        public async Task<(bool, string)> GenerateFileAsync(string folderName, string fileName, double fileSizeMB)
+        #region Files processing
+        public async Task<(bool, string)> GenerateFileAsync(string filePath, double fileSizeMB)
         {
-            var filePath = Path.Combine(folderName, $"{fileName}.txt");  
             var result = await generatorManager.GenerateFileAsync(filePath, fileSizeMB);
             return result;
         }
@@ -86,5 +94,6 @@ namespace FileSorting
             var result = await sorterManager.SortFile(filePath);
             return result;
         }
+        #endregion
     }
 }
