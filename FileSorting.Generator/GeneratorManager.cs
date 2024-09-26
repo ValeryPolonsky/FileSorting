@@ -45,12 +45,12 @@ namespace FileSorting.Generator
 
             Directory.CreateDirectory(dividedFilesDirectory);
 
-            for (int i = 1; i <= Consts.NUMBER_OF_PARALLEL_WRITE_FILES; i++)
+            for (int i = 1; i <= Consts.NUMBER_OF_PARALLEL_WRITERS; i++)
             {
                 var task = Task.Run(async () =>
                 {
                     var outputFilePath = Path.Combine(dividedFilesDirectory, $"output_{Guid.NewGuid()}.txt");
-                    await GenerateFileSingleAsync(outputFilePath, fileSizeMB / Consts.NUMBER_OF_PARALLEL_WRITE_FILES);
+                    await GenerateFileSingleAsync(outputFilePath, fileSizeMB / Consts.NUMBER_OF_PARALLEL_WRITERS);
                 });
                 tasks.Add(task);
             }
@@ -73,20 +73,23 @@ namespace FileSorting.Generator
                     {
                         if (resultGetFileSize.Item2 < fileSizeMB)
                         {
-                            var blocks = await GenerateFileBlockMultipleAsync(Consts.NUMBER_OF_PARALLEL_BLOCKS);
+                            var blocks = (await GenerateFileBlockMultipleAsync(Consts.NUMBER_OF_PARALLEL_BLOCKS))
+                                .ToList();
                             var blockSizeMB = GetBlockSizeMB(blocks);
 
                             if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
                             {
-                                var subBlock = new ConcurrentBag<string>();
-                                foreach(var line in blocks)
+                                var subBlock = new List<string>();
+                                for (int i = 0; i < blocks.Count; i += Consts.SUB_BLOCK_STEP)
                                 {
-                                    subBlock.Add(line);
-                                    blockSizeMB = GetBlockSizeMB(subBlock);
+                                    for (int j = i; j < i + Consts.SUB_BLOCK_STEP && j < blocks.Count; j++)
+                                        subBlock.Add(blocks[j]);
 
-                                    if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
-                                        break;
+                                    blockSizeMB = GetBlockSizeMB(subBlock);
+                                    if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)                                    
+                                        break;                                   
                                 }
+
                                 blocks = subBlock;
                             }
                             
@@ -225,12 +228,13 @@ namespace FileSorting.Generator
 
         private Task<(bool, string)> MergeDividedFiles(string sourceFilePath)
         {
-            return Task.Run(() =>
+            return Task.Run(async () =>
             {
                 try
                 {
                     var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-                    var merged_files_counter = 1;
+                    var tasks = new List<Task>();
+                    var bufferCounter = 0;
 
                     while (true)
                     {
@@ -240,12 +244,26 @@ namespace FileSorting.Generator
 
                         for (int i = 0; i < files.Length; i += 2)
                         {
-                            if (i < files.Length - 1)
+                            if (bufferCounter < Consts.NUMBER_OF_PARALLEL_READERS &&
+                                i < files.Length - 1)
                             {
-                                MergeDividedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
-                                File.Delete(files[i]);
-                                File.Delete(files[i + 1]);
-                                merged_files_counter++;
+                                int capturedI = i;
+                                int capturedIplus1 = i + 1;
+                                tasks.Add(Task.Run(() =>
+                                {
+                                    MergeDividedFiles(files[capturedI], files[capturedIplus1], Path.Combine(dividedFilesDirectory, $"merged_{Guid.NewGuid()}.txt"));
+                                    File.Delete(files[capturedI]);
+                                    File.Delete(files[capturedIplus1]);
+                                }));
+                                bufferCounter++;
+                            }
+
+                            if (bufferCounter == Consts.NUMBER_OF_PARALLEL_READERS ||
+                                i + 2 >= files.Length - 1)
+                            {
+                                await Task.WhenAll(tasks.ToArray());
+                                tasks.Clear();
+                                bufferCounter = 0;
                             }
                         }
                     }
