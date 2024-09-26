@@ -101,19 +101,29 @@ namespace FileSorting.Sorter
                 {
                     string dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
                     var files = Directory.GetFiles(dividedFilesDirectory);
-                    var semaphoreSlim = new SemaphoreSlim(Consts.NUMBER_OF_PARALLEL_READERS);
-                    var tasks = files.Select(async file =>
+                    var tasks = new List<Task>();
+                    var bufferCounter = 0;
+                  
+                    for (int i = 0; i < files.Length; i++)
                     {
-                        await semaphoreSlim.WaitAsync();
-                        try
+                        if (bufferCounter < Consts.NUMBER_OF_PARALLEL_READERS)
                         {
-                            SortDividedFile(file);
+                            int capturedI = i;
+                            tasks.Add(Task.Run(() =>
+                            {
+                                SortDividedFile(files[capturedI]);
+                            }));
+                            bufferCounter++;
                         }
-                        finally
+
+                        if (bufferCounter == Consts.NUMBER_OF_PARALLEL_READERS ||
+                            i == files.Length - 1)
                         {
-                            semaphoreSlim.Release();
+                            await Task.WhenAll(tasks.ToArray());
+                            tasks.Clear();
+                            bufferCounter = 0;
                         }
-                    });
+                    }
 
                     await Task.WhenAll(tasks);
                     return (true, string.Empty);
@@ -149,12 +159,13 @@ namespace FileSorting.Sorter
         
         private Task<(bool,string)> MergeSortedFiles(string sourceFilePath)
         {
-            return Task.Run(() => 
+            return Task.Run(async () => 
             {
                 try
                 {
                     var dividedFilesDirectory = Path.Combine(Path.GetDirectoryName(sourceFilePath), Consts.FILE_SORTING_TEMP_FOLDER);
-                    var merged_files_counter = 1;
+                    var tasks = new List<Task>();
+                    var bufferCounter = 0;
 
                     while (true)
                     {
@@ -164,12 +175,26 @@ namespace FileSorting.Sorter
 
                         for (int i = 0; i < files.Length; i += 2)
                         {
-                            if (i < files.Length - 1)
+                            if (bufferCounter < Consts.NUMBER_OF_PARALLEL_READERS &&
+                                i < files.Length - 1)
                             {
-                                MergeSortedFiles(files[i], files[i + 1], Path.Combine(dividedFilesDirectory, $"merged_{merged_files_counter}.txt"));
-                                File.Delete(files[i]);
-                                File.Delete(files[i + 1]);
-                                merged_files_counter++;
+                                int capturedI = i;
+                                int capturedIplus1 = i + 1;
+                                tasks.Add(Task.Run(() =>
+                                {
+                                    MergeSortedFiles(files[capturedI], files[capturedIplus1], Path.Combine(dividedFilesDirectory, $"merged_{Guid.NewGuid()}.txt"));
+                                    File.Delete(files[capturedI]);
+                                    File.Delete(files[capturedIplus1]);
+                                }));
+                                bufferCounter++;
+                            }
+
+                            if (bufferCounter == Consts.NUMBER_OF_PARALLEL_READERS ||
+                                i + 2 >= files.Length - 1)
+                            {
+                                await Task.WhenAll(tasks.ToArray());
+                                tasks.Clear();
+                                bufferCounter = 0;
                             }
                         }
                     }
