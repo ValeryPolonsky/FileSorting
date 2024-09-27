@@ -100,16 +100,28 @@ namespace FileSorting.Generator
                                         subBlock.Add(blocks[blockStep2]);
 
                                     blockSizeMB = GetBlockSizeMB(subBlock);
-                                    if (blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)                                    
-                                        break;                                   
+                                    while(blockSizeMB + resultGetFileSize.Item2 > fileSizeMB)
+                                    {
+                                        if (subBlock.Any())
+                                            subBlock.RemoveAt(0);
+                                        else
+                                            break;
+
+                                        blockSizeMB = GetBlockSizeMB(subBlock);
+                                    }                                  
                                 }
 
                                 blocks = subBlock;
                             }
-                            
-                            var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, blocks);
-                            if (!resultWriteBlockToFile.Item1)
-                                return (false, resultWriteBlockToFile.Item2);
+
+                            if (blocks.Any())
+                            {
+                                var resultWriteBlockToFile = await WriteBlockToFileAsync(filePath, blocks);
+                                if (!resultWriteBlockToFile.Item1)
+                                    return (false, resultWriteBlockToFile.Item2);
+                            }
+                            else
+                                return (true, string.Empty);
                         }
                         else
                             return (true, string.Empty);
